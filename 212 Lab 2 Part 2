@@ -1,0 +1,409 @@
+ORG 0
+
+	acall	CONFIGURE_LCD   ;ALWAYS ADD THIS LINE TO YOUR CODES AT THE BEGINNING IN ORDER TO INITIALIZE THE LCD SCREEN
+START:
+	clr A
+	mov DPTR,#MYSTRING
+	mov R0, #0H
+	mov R1, #0H
+	mov R2, #0H
+	mov R3, #2H
+	mov R4, #0H
+	mov R5, #0H
+	mov R6, #0H
+	mov R7, #0H
+	MOV 10H, #0H 	
+	MOV 11H, #0H
+
+DATA_LOOP_1:  			;DATA LOOP THAT PRINTS 'n='
+	movc a,@a+dptr
+	jz DATA_FINISHED_1
+	acall SEND_DATA
+	clr a
+	inc dptr
+	sjmp DATA_LOOP_1
+
+DATA_FINISHED_1: 
+	mov a, #006h  ; Force cursor to the right
+	acall send_command
+	
+USER_INPUT_1: ;take the first digit input
+	acall KEYBOARD
+	acall SEND_DATA
+	mov R4, A;save the first digit on R4
+
+USER_INPUT_2: ;take the second digit input
+	acall KEYBOARD
+	MOV R5, A ; save the second digit on R5
+	CJNE A, #'A', NOT_A
+	mov A, R4
+	acall ASCII_TO_HEX_1;convert the digit to hex
+	MOV R4,A 
+	sjmp NEXT_LINE 
+
+NOT_A: ;write the digit to lcd if the input's not a, which means it's a two digit number
+	acall SEND_DATA
+	MOV A, R5
+	acall ASCII_TO_HEX_1 ;convert the second digit to hex
+	MOV R5,A
+	MOV A, R4
+	acall ASCII_TO_HEX_10 ;convert the first digit to hex
+	add a, R5 ;add the second digit to the first digit
+	mov R4,a ;save the input on R4
+
+
+NEXT_LINE: ;pass to the next line
+	mov A, #0C0h
+	acall send_command
+	clr A
+	mov DPTR, #MYSTRING_1
+
+
+DATA_LOOP_2: ;write Fib(n)=
+	movc A, @A+DPTR
+	jz DATA_FINISHED_2
+	acall SEND_DATA
+	clr a
+	inc dptr
+	sjmp DATA_LOOP_2
+
+DATA_FINISHED_2:
+	mov A, #006h ;force cursor to the right
+	acall SEND_COMMAND
+
+
+CHECK_0: ;write 0 to lcd if the number entered is 0
+	CJNE R4,#0h,CHECK_1 ;check if the number entered is 0, if not check if it's 1
+	mov a, #'0'
+	acall SEND_DATA
+	Ljmp END_LOOP
+CHECK_1: ;check if the number entered is 1
+	CJNE R4, #1h, FIBONACCI_SEQUENCE_START
+	MOV A, #'1'
+	ACALL SEND_DATA
+	ljmp END_LOOP
+
+
+
+FIBONACCI_SEQUENCE_START: ;F(2)
+	MOV R0, #0H
+	MOV R1, #1H
+	mov A, R0 
+	add A, R1
+	mov R0, A
+	mov A, R4
+	CJNE A,3H, FIBONACCI_SEQUENCE_1
+	mov A, R0
+	ACALL HEX_REP
+	sjmp END_LOOP
+FIBONACCI_SEQUENCE_1: ;F(2k-1)
+	CLR C
+	INC R3	
+	mov A, R0 
+	add A, R1
+	DA A 
+	mov R1, A ;first hex
+	CLR A
+	ADDC A, R7
+	ADD A, R6
+	DA A 
+	MOV R6, A ; second hex
+	CLR A
+	ADDC A, 10H
+	ADD A, 11H
+	DA A 
+	MOV 10H, A ;third hex
+	mov A, R4
+	CJNE A, 3H, FIBONACCI_SEQUENCE_2
+	mov a, 10H
+	CJNE a, #0, THIRD_HEX_1
+	CJNE R6,#0,SECOND_HEX_1
+DIRECT_1:	
+	mov A, R1
+	ACALL HEX_REP
+	sjmp END_LOOP
+THIRD_HEX_1:
+	MOV A, 10H
+	ACALL HEX_REP
+	MOV A, R6
+	ACALL HEX_REP
+	mov a, R1
+	ACALL HEX_REP
+	sjmp END_LOOP
+SECOND_HEX_1:	
+	MOV A, R6
+	ACALL HEX_REP
+	mov a, R1
+	ACALL HEX_REP
+	sjmp END_LOOP
+FIBONACCI_SEQUENCE_2: ;F(2k)
+	CLR C
+	INC R3
+	mov A, R0 
+	add A, R1
+	DA A 
+	mov R0, A;first hex
+	CLR A
+	ADDC A, R6
+	ADD A, R7
+	DA A  
+	MOV R7, A;second hex
+	CLR A
+	ADDC A, 10H
+	ADD A, 11H
+	DA A 
+	MOV 11H, A ;third hex
+	mov A, R4
+	CJNE A,3H, FIBONACCI_SEQUENCE_1
+	mov a, 11H
+	CJNE a, #0, THIRD_HEX_2
+	CJNE R7, #0, SECOND_HEX_2
+DIRECT_2:	
+	mov A, R0
+	ACALL HEX_REP
+	sjmp END_LOOP
+THIRD_HEX_2:
+	MOV A, 11H
+	ACALL HEX_REP
+	MOV A, R7
+	ACALL HEX_REP
+	mov a, R0
+	ACALL HEX_REP
+	sjmp END_LOOP
+SECOND_HEX_2:
+ 	MOV A, R7
+	ACALL HEX_REP
+	MOV A, R0
+	ACALL HEX_REP
+
+	
+END_LOOP:
+    	clr A
+	acall KEYBOARD
+	CJNE A, #'B', END_LOOP ; Stay in an infinite loop
+	mov a, #01h ;clear lcd
+	acall SEND_COMMAND
+	mov a,#80H	;FORCE CURSOR TO BEGINNING OF THE FIRST LINE
+	acall SEND_COMMAND
+	ljmp START
+
+ASCII_TO_HEX_1:	;SUBRROUTINE TO CONVERT ASCII INTO HEX
+	CLR C ;clear cy
+	SUBB A, #30H ;a=a-subb-cy
+	ret
+
+ASCII_TO_HEX_10: ;subroutine to convert the first digit of the two digit numbers to hex
+	CLR C 
+	SUBB A, #30H 
+	MOV R4, A 
+	CLR A 
+	AGAIN:  ADD A, #10
+		DJNZ R4, AGAIN
+	ret
+
+HEX_TO_ASCII:
+	CJNE A, #0AH, COMPARATOR_1
+COMPARATOR_1:
+	JNC BIGGER_THAN_9D
+	JC BETWEEN_0_9D
+BIGGER_THAN_9D:
+	CJNE A, #64H,COMPARATOR_2
+COMPARATOR_2:
+	JNC BIGGER_THAN_99D
+	JC BETWEEN_10_99D
+BIGGER_THAN_99D:
+	CJNE A, #0FFH, COMPARATOR_3
+COMPARATOR_3:
+	JC BETWEEN_99D_FFH
+BETWEEN_0_9D:
+	ADD A, #30H
+	ACALL SEND_DATA
+	sjmp EXIT
+BETWEEN_10_99D:
+	MOV B, #10
+	DIV AB
+	ADD A, #30H
+	ACALL SEND_DATA
+	MOV A, B
+	ADD A, #30H
+	ACALL SEND_DATA	
+	sjmp EXIT
+BETWEEN_99D_FFH:
+	MOV B, #100
+	DIV AB
+	ADD A, #30H
+	ACALL SEND_DATA
+	MOV A, B
+	MOV B, #10
+	DIV AB
+	ADD A, #30H
+	ACALL SEND_DATA
+	MOV A, B
+	ADD A, #30H
+	ACALL SEND_DATA
+EXIT:
+	RET
+
+	
+
+HEX_REP:;writing in hex for n bigger than 13
+	MOV B, A 
+	ANL A, #0F0H
+	SWAP A 
+	CJNE A, #10,COMPARATOR_4
+COMPARATOR_4:
+	JNC BIGGER_THAN_9D_1
+	JC BETWEEN_0_9D_1
+BETWEEN_0_9D_1:
+	ADD A, #30H
+	ACALL SEND_DATA
+	sjmp LOWER_BYTE
+BIGGER_THAN_9D_1:
+	ADD A, #37H
+	ACALL SEND_DATA	
+
+LOWER_BYTE:	
+	MOV A, B 
+	ANL A, #0FH
+	CJNE A, #10,COMPARATOR_5
+COMPARATOR_5:
+	JNC BIGGER_THAN_9D_2
+	JC BETWEEN_0_9D_2
+BETWEEN_0_9D_2:
+	ADD A, #30H
+	ACALL SEND_DATA
+	sjmp EXIT_1
+BIGGER_THAN_9D_2:
+	ADD A, #37H
+	ACALL SEND_DATA	
+EXIT_1: RET
+	
+	
+	
+
+
+
+CONFIGURE_LCD:	;THIS SUBROUTINE SENDS THE INITIALIZATION COMMANDS TO THE LCD
+	mov a,#38H	;TWO LINES, 5X7 MATRIX
+	acall SEND_COMMAND
+	mov a,#0FH	;DISPLAY ON, CURSOR BLINKING
+	acall SEND_COMMAND
+	mov a,#06H	;INCREMENT CURSOR (SHIFT CURSOR TO RIGHT)
+	acall SEND_COMMAND
+	mov a,#01H	;CLEAR DISPLAY SCREEN
+	acall SEND_COMMAND
+	mov a,#80H	;FORCE CURSOR TO BEGINNING OF THE FIRST LINE
+	acall SEND_COMMAND
+	ret
+
+
+
+SEND_COMMAND: ;THIS SUBROUTINE SENDS THE LCD COMMANDS TO THE LCD
+	mov p1,a		;THE COMMAND IS STORED IN A, SEND IT TO LCD
+	clr p3.5		;RS=0 BEFORE SENDING COMMAND
+	clr p3.6		;R/W=0 TO WRITE
+	setb p3.7	;SEND A HIGH TO LOW SIGNAL TO ENABLE PIN
+	acall DELAY
+	clr p3.7
+	ret
+
+
+SEND_DATA: ;THIS SUBROUTINE SENDS DATA TO BE DISPLAYED IN AN ASCII FORMAT TO THE LCD
+	mov p1,a		;SEND THE DATA STORED IN A TO LCD
+	setb p3.5	;RS=1 BEFORE SENDING DATA
+	clr p3.6		;R/W=0 TO WRITE
+	setb p3.7	;SEND A HIGH TO LOW SIGNAL TO ENABLE PIN
+	acall DELAY
+	clr p3.7
+	ret
+
+
+DELAY:
+	push 0
+	push 1
+	mov r0,#50
+DELAY_OUTER_LOOP:
+	mov r1,#255
+	djnz r1,$
+	djnz r0,DELAY_OUTER_LOOP
+	pop 1
+	pop 0
+	ret
+
+
+KEYBOARD: ; takes the key pressed from the keyboard and puts it to A
+	mov	P0, #0ffh	;makes P0 input
+K1:
+	mov	P2, #0	;ground all rows
+	mov	A, P0
+	anl	A, #00001111B
+	cjne	A, #00001111B, K1
+K2:
+	acall	DELAY
+	mov	A, P0
+	anl	A, #00001111B
+	cjne	A, #00001111B, KB_OVER
+	sjmp	K2
+KB_OVER:
+	acall DELAY
+	mov	A, P0
+	anl	A, #00001111B
+	cjne	A, #00001111B, KB_OVER1
+	sjmp	K2
+KB_OVER1:
+	mov	P2, #11111110B
+	mov	A, P0
+	anl	A, #00001111B
+	cjne	A, #00001111B, ROW_0
+	mov	P2, #11111101B
+	mov	A, P0
+	anl	A, #00001111B
+	cjne	A, #00001111B, ROW_1
+	mov	P2, #11111011B
+	mov	A, P0
+	anl	A, #00001111B
+	cjne	A, #00001111B, ROW_2
+	mov	P2, #11110111B
+	mov	A, P0
+	anl	A, #00001111B
+	cjne	A, #00001111B, ROW_3
+	ljmp	K2
+	
+ROW_0:
+	mov	DPTR, #KCODE0
+	sjmp	KB_FIND
+ROW_1:
+	mov	DPTR, #KCODE1
+	sjmp	KB_FIND
+ROW_2:
+	mov	DPTR, #KCODE2
+	sjmp	KB_FIND
+ROW_3:
+	mov	DPTR, #KCODE3
+KB_FIND:
+	rrc	A
+	jnc	KB_MATCH
+	inc	DPTR
+	sjmp	KB_FIND
+KB_MATCH:
+	clr	A
+	movc	A, @A+DPTR; get ASCII code from the table 
+	ret
+
+;ASCII look-up table 
+KCODE0:	DB	'1', '2', '3', 'A'
+KCODE1:	DB	'4', '5', '6', 'B'
+KCODE2:	DB	'7', '8', '9', 'C'
+KCODE3:	DB	'*', '0', '#', 'D'
+
+MYSTRING: DB 'n=',0
+MYSTRING_1: DB 'Fib(n)=',0
+
+END
+
+
+
+
+
+
+
